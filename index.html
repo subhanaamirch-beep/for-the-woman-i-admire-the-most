@@ -1,0 +1,427 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>For you</title>
+<style>
+  html, body { margin: 0; height: 100%; background: #000; overflow: hidden; }
+  canvas { position: fixed; inset: 0; width: 100%; height: 100%; display: block; background: #000; }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<script>
+(() => {
+  "use strict";
+
+  // "I love you" in many languages (only phrasings I am confident are correct)
+  const PH = [
+    "I love you",
+    "میں تم سے محبت کرتا ہوں",
+    "मैं तुमसे प्यार करता हूँ",
+    "ਮੈਂ ਤੈਨੂੰ ਪਿਆਰ ਕਰਦਾ ਹਾਂ",
+    "أحبك",
+    "Je t'aime",
+    "Te amo",
+    "Ti amo",
+    "Ich liebe dich",
+    "Eu te amo",
+    "Ik hou van je",
+    "Σ' αγαπώ",
+    "Seni seviyorum",
+    "Я тебя люблю",
+    "Я тебе кохаю",
+    "Kocham cię",
+    "Miluji tě",
+    "Ľúbim ťa",
+    "Szeretlek",
+    "Te iubesc",
+    "Обичам те",
+    "Волим те",
+    "Volim te",
+    "Ljubim te",
+    "Të dua",
+    "Jag älskar dig",
+    "Jeg elsker deg",
+    "Jeg elsker dig",
+    "Rakastan sinua",
+    "Ég elska þig",
+    "Ma armastan sind",
+    "Maite zaitut",
+    "Би чамд хайртай",
+    "Мен сені жақсы көремін",
+    "Я цябе кахаю",
+    "Те сакам",
+    "Quérote",
+    "Aloha au iā ʻoe",
+    "Tha gaol agam ort",
+    "Mwen renmen ou",
+    "Inhobbok",
+    "Ech hunn dech gär",
+    "Es tevi mīlu",
+    "Aš tave myliu",
+    "Is breá liom tú",
+    "Rwy'n dy garu di",
+    "אני אוהב אותך",
+    "دوستت دارم",
+    "Ես քեզ սիրում եմ",
+    "მე შენ მიყვარხარ",
+    "我爱你",
+    "愛してる",
+    "사랑해",
+    "Anh yêu em",
+    "ฉันรักคุณ",
+    "Aku cinta kamu",
+    "Saya cintakan awak",
+    "Mahal kita",
+    "Nakupenda",
+    "Ngiyakuthanda",
+    "Ek is lief vir jou",
+    "እወድሃለሁ",
+    "Waan ku jeclahay",
+    "Mi amas vin",
+    "আমি তোমাকে ভালোবাসি",
+    "நான் உன்னை காதலிக்கிறேன்",
+    "నేను నిన్ను ప్రేమిస్తున్నాను",
+    "ഞാൻ നിന്നെ സ്നേഹിക്കുന്നു",
+    "ನಾನು ನಿನ್ನನ್ನು ಪ್ರೀತಿಸುತ್ತೇನೆ",
+    "હું તને પ્રેમ કરું છું",
+    "मी तुझ्यावर प्रेम करतो",
+    "म तिमीलाई माया गर्छु",
+    "මම ඔබට ආදරෙයි",
+    "T'estimo",
+    "איך האב דיך ליב"
+  ];
+
+  const FONT = '"Noto Sans","Segoe UI","Helvetica Neue",Arial,"Noto Naskh Arabic","Noto Sans Arabic",' +
+    '"Noto Sans Devanagari","Noto Sans Gurmukhi","Noto Sans Bengali","Noto Sans Tamil","Noto Sans Telugu",' +
+    '"Noto Sans Hebrew","Noto Sans Georgian","Noto Sans Armenian","Noto Sans Ethiopic","Noto Sans Thai",' +
+    '"Noto Sans CJK JP","Hiragino Sans","Yu Gothic","Malgun Gothic","Microsoft YaHei","Nirmala UI",' +
+    '"Leelawadee UI","Khmer UI","Lao UI","Ebrima","Gadugi","Arial Unicode MS",sans-serif';
+
+  const COL = ["#7d0f16", "#a8131c", "#cf1f27", "#ee3a2b", "#ff6b3d"];
+
+  const cv = document.getElementById("c");
+  const ctx = cv.getContext("2d");
+
+  // ---------- helpers ----------
+  const sm = x => { x = x < 0 ? 0 : x > 1 ? 1 : x; return x * x * (3 - 2 * x); };
+  function mulberry32(a) {
+    return function () {
+      a |= 0; a = a + 0x6D2B79F5 | 0;
+      let t = Math.imul(a ^ a >>> 15, 1 | a);
+      t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+      return ((t ^ t >>> 14) >>> 0) / 4294967296;
+    };
+  }
+
+  // ---------- heart geometry (implicit heart curve) ----------
+  const f = (x, y) => { const a = x * x + y * y - 1; return a * a * a - x * x * y * y * y; };
+  const inside = (x, y) => f(x, y) <= 0;
+  const CY = 0.1; // scaling centre
+  const bpts = [];
+  for (let k = 0; k < 720; k++) {
+    const th = k / 720 * Math.PI * 2, dx = Math.cos(th), dy = Math.sin(th);
+    let lo = 0, hi = 2;
+    for (let n = 0; n < 30; n++) { const m = (lo + hi) / 2; if (inside(dx * m, CY + dy * m)) lo = m; else hi = m; }
+    bpts.push([dx * lo, CY + dy * lo]);
+  }
+  let xmin = 9, xmax = -9, ymin = 9, ymax = -9;
+  for (const [x, y] of bpts) { xmin = Math.min(xmin, x); xmax = Math.max(xmax, x); ymin = Math.min(ymin, y); ymax = Math.max(ymax, y); }
+  const bw = xmax - xmin, bh = ymax - ymin, cxN = (xmin + xmax) / 2, cyN = (ymin + ymax) / 2;
+
+  // ---------- state ----------
+  let W, H, HC, dpr, S, fs, items = [], glow, tComplete = 10, t0 = performance.now();
+  let ea = 0, eb = 0, ecy = 0, heartBottom = 0;
+  let capLines = [], capSize = 14, introLines = [], introSize = 24;
+  const START = 3.5; // seconds of intro before the heart begins
+  const SERIF = 'Georgia,"Playfair Display","Times New Roman",serif';
+  const INTRO = "Thank you for being so strong, sweetheart";
+  const CAPTION = "You are more loved and valued by me, even if no one else says it. I can\u2019t describe it in one sentence or an essay, so here is every language I could think of telling you I love you in.";
+  function wrap(text, maxW) {
+    const words = text.split(" "), out = []; let cur = "";
+    for (const w of words) {
+      const test = cur ? cur + " " + w : w;
+      if (ctx.measureText(test).width > maxW && cur) { out.push(cur); cur = w; } else cur = test;
+    }
+    if (cur) out.push(cur);
+    return out;
+  }
+  let sprites = {}, baseFont = 10;
+
+  function depthOf(nx, ny) { // 0 at centre, 1 on the outline
+    let lo = 0, hi = 1.15;
+    for (let n = 0; n < 14; n++) {
+      const m = (lo + hi) / 2;
+      if (inside(nx / m, (ny - CY) / m + CY)) hi = m; else lo = m;
+    }
+    return Math.min(1, hi);
+  }
+
+  function getSprite(idx, b) {
+    const key = idx * 8 + b;
+    let s = sprites[key];
+    if (s) return s;
+    const c = document.createElement("canvas");
+    const x = c.getContext("2d");
+    x.font = baseFont + "px " + FONT;
+    const w = Math.ceil(x.measureText(PH[idx]).width);
+    const pad = Math.ceil(baseFont * 0.6);
+    c.width = w + pad * 2;
+    c.height = Math.ceil(baseFont * 1.7) + pad * 2;
+    x.font = baseFont + "px " + FONT;
+    x.textAlign = "center";
+    x.textBaseline = "middle";
+    x.fillStyle = COL[b];
+    if (b >= 3) { x.shadowColor = COL[b]; x.shadowBlur = baseFont * 0.45; }
+    x.fillText(PH[idx], c.width / 2, c.height / 2);
+    s = sprites[key] = c;
+    return s;
+  }
+
+  function build() {
+    dpr = Math.min(window.devicePixelRatio || 1, 2);
+    W = window.innerWidth; H = window.innerHeight; HC = H * 0.43;
+    cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr);
+    sprites = {};
+
+    const rng = mulberry32(14022026);
+    S = Math.min(W * 0.9 / bw, H * 0.74 / bh);
+    const heartH = bh * S;
+    fs = Math.max(8.5, heartH * 0.024);
+    baseFont = fs * dpr * 1.25;
+    const rowH = fs * 1.45;
+    const toN = (px, py) => [(px - W / 2) / S + cxN, (HC - py) / S + cyN];
+    const ins = (px, py) => { const [nx, ny] = toN(px, py); return inside(nx / 0.985, (ny - CY) / 0.985 + CY); };
+
+    // measure phrase widths (CSS px)
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.font = fs + "px " + FONT;
+    const TW = PH.map(p => ctx.measureText(p).width);
+    capSize = Math.max(12, Math.min(W * 0.02, 19));
+    ctx.font = "italic " + capSize + "px " + SERIF;
+    capLines = wrap(CAPTION, Math.min(W * 0.88, 760));
+    introSize = Math.max(20, Math.min(W * 0.055, 40));
+    ctx.font = "italic " + introSize + "px " + SERIF;
+    introLines = wrap(INTRO, W * 0.82);
+    heartBottom = HC + heartH / 2;
+    ea = heartH * 0.25; eb = heartH * 0.14; ecy = HC - heartH * 0.04;
+
+    let bag = [];
+    const refill = () => { bag = PH.map((_, i) => i); for (let i = bag.length - 1; i > 0; i--) { const j = Math.floor(rng() * (i + 1)); [bag[i], bag[j]] = [bag[j], bag[i]]; } };
+
+    items = [];
+    const nRows = Math.floor(heartH / rowH);
+    const y0 = HC - heartH / 2 + (heartH - nRows * rowH) / 2;
+    const hh = rowH * 0.42, gap = fs * 0.9;
+
+    for (let r = 0; r < nRows; r++) {
+      const yc = y0 + rowH * (r + 0.5);
+      const spans = []; let st = null;
+      for (let px = 0; px <= W; px++) {
+        const ok = ins(px, yc) && ins(px, yc - hh) && ins(px, yc + hh);
+        if (ok && st === null) st = px;
+        if (!ok && st !== null) { spans.push([st, px - 1]); st = null; }
+      }
+      for (const [sa, sb] of spans) {
+        const a = sa + fs * 0.15, L = sb - sa - fs * 0.3;
+        if (L < fs * 3) continue;
+        const row = []; let sum = 0;
+        for (;;) {
+          let placed = false;
+          for (let tr = 0; tr < 18; tr++) {
+            if (!bag.length) refill(); const bi = Math.floor(rng() * bag.length), idx = bag[bi], sc = 0.8 + rng() * 0.42, w = TW[idx] * sc;
+            const need = (row.length ? gap : 0) + w;
+            if (sum + need <= L) { row.push({ idx, sc, w }); bag.splice(bi, 1); sum += need; placed = true; break; }
+          }
+          if (!placed) break;
+        }
+        if (!row.length) continue;
+        const fac = Math.min(1.1, L / sum);
+        let sw = 0;
+        for (const it of row) { it.w *= fac; it.sc *= fac; sw += it.w; }
+        const natural = sw + gap * (row.length - 1);
+        const left = L - natural;
+        const extra = row.length > 1 ? left / (row.length - 1) : 0;
+        let x = a + (row.length === 1 ? left / 2 : 0);
+        for (const it of row) {
+          const px = x + it.w / 2;
+          x += it.w + gap + extra;
+          const py = yc + (rng() - 0.5) * rowH * 0.22;
+          const inEll = xx => { const dx = (xx - W / 2) / (ea * 1.05), dy = (py - ecy) / (eb * 1.15); return dx * dx + dy * dy < 1; };
+          if (inEll(px) || inEll(px - it.w / 2) || inEll(px + it.w / 2)) continue; // keep the middle clear for the message
+          const [nx, ny] = toN(px, py);
+          const d = depthOf(nx, ny);
+
+          // rotation: follow the outline near the edge, loose jitter elsewhere
+          const e = 1e-4;
+          const gx = (f(nx + e, ny) - f(nx - e, ny)) / (2 * e);
+          const gy = (f(nx, ny + e) - f(nx, ny - e)) / (2 * e);
+          let ang = Math.atan2(-gx, -gy);
+          if (ang > Math.PI / 2) ang -= Math.PI;
+          if (ang < -Math.PI / 2) ang += Math.PI;
+          const rot = ang * sm((d - 0.72) / 0.28) * 0.3 + (rng() - 0.5) * 0.36 + (rng() < 0.15 ? (rng() - 0.5) * 0.7 : 0);
+
+          const score = 0.2 + 0.5 * d + rng() * 0.45;
+          const bucket = Math.max(0, Math.min(4, Math.floor(score * 5)));
+          const alpha = Math.min(1, 0.5 + 0.35 * d + rng() * 0.2 + (d > 0.9 ? 0.12 : 0));
+
+          // entrance
+          const order = (1 - d) * 0.6 + rng() * 0.4;
+          const delay = 0.2 + 4.6 * Math.pow(order, 0.85);
+          const dur = 2.4 + rng() * 2.2;
+          const D = heartH * (0.25 + rng() * 0.55);
+          const m = rng();
+          let ox, oy;
+          if (m < 0.16) { ox = -D * 1.1; oy = (rng() - 0.5) * D * 0.6; }
+          else if (m < 0.32) { ox = D * 1.1; oy = (rng() - 0.5) * D * 0.6; }
+          else if (m < 0.48) { ox = (rng() - 0.5) * D * 0.6; oy = -D; }
+          else if (m < 0.64) { ox = (rng() - 0.5) * D * 0.6; oy = D; }
+          else if (m < 0.82) { ox = (rng() < 0.5 ? -1 : 1) * D * 0.8; oy = (rng() < 0.5 ? -1 : 1) * D * 0.8; }
+          else { const aa = Math.atan2(py - HC, px - W / 2) + (rng() - 0.5) * 1.2; ox = Math.cos(aa) * D; oy = Math.sin(aa) * D; }
+          const olen = Math.hypot(ox, oy) || 1;
+          const swirl = (rng() - 0.5) * 0.7;
+
+          items.push({
+            idx: it.idx, x: px, y: py, rot, sc: it.sc, bucket, a: alpha,
+            d: delay, du: dur, ox, oy, cx: (-oy / olen) * swirl * olen, cy: (ox / olen) * swirl * olen,
+            sr: (rng() - 0.5) * 3.2, ph: rng() * 6.283,
+            f1: 0.5 + rng() * 0.8, f2: 0.45 + rng() * 0.8, f3: 0.4 + rng() * 0.7, f4: 0.7 + rng() * 1.1
+          });
+        }
+      }
+    }
+    tComplete = 0;
+    for (const it of items) tComplete = Math.max(tComplete, it.d + it.du);
+
+    // soft glow behind the heart (shadow trick works everywhere, including Safari)
+    glow = document.createElement("canvas");
+    glow.width = cv.width; glow.height = cv.height;
+    const g = glow.getContext("2d");
+    const OFF = 10000;
+    g.shadowColor = "rgba(255,55,35,1)";
+    g.shadowBlur = heartH * 0.09 * dpr;
+    g.shadowOffsetX = OFF;
+    g.fillStyle = "#000";
+    g.beginPath();
+    bpts.forEach(([nx, ny], i) => {
+      const x = (W / 2 + (nx - cxN) * S) * dpr - OFF, y = (HC - (ny - cyN) * S) * dpr;
+      i ? g.lineTo(x, y) : g.moveTo(x, y);
+    });
+    g.closePath(); g.fill();
+  }
+
+  // ---------- render ----------
+  function frame(now) {
+    const el = (now - t0) / 1000;
+    const t = el - START;
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.globalAlpha = 1;
+    ctx.fillStyle = "#000";
+    ctx.fillRect(0, 0, cv.width, cv.height);
+
+    const tt = Math.max(t, 0);
+    const settle = sm((t - (tComplete - 1.5)) / 2.5);
+    const ph = (tt % 2.6) / 2.6;
+    const beat = Math.exp(-Math.pow((ph - 0.06) / 0.05, 2)) + 0.55 * Math.exp(-Math.pow((ph - 0.24) / 0.06, 2));
+    const ps = 1 + 0.016 * beat * settle;
+
+    // glow
+    const gl = sm(t / 1.5) * (0.05 + 0.3 * sm(tt / tComplete)) * (1 + 0.3 * beat * settle);
+    ctx.globalAlpha = Math.min(1, gl);
+    ctx.drawImage(glow, 0, 0);
+
+    const wc = W / 2, hc = HC;
+    for (let i = 0; i < items.length; i++) {
+      const it = items[i];
+      const p = (t - it.d) / it.du;
+      if (p <= 0) continue;
+      const pc = p > 1 ? 1 : p;
+      const e = 1 - Math.pow(1 - pc, 3.2);
+      const inv = 1 - e;
+      const arc = Math.sin(Math.PI * e);
+      let x = it.x + it.ox * inv + it.cx * arc;
+      let y = it.y + it.oy * inv + it.cy * arc;
+      let rot = it.rot + it.sr * inv;
+      const fa = sm((p - 0.85) / 0.3);
+      if (fa > 0) {
+        const amp = fs * 0.11 * fa;
+        x += Math.sin(tt * it.f1 + it.ph) * amp;
+        y += Math.cos(tt * it.f2 + it.ph * 1.3) * amp;
+        rot += Math.sin(tt * it.f3 + it.ph) * 0.025 * fa;
+      }
+      x = wc + (x - wc) * ps; y = hc + (y - hc) * ps;
+      if (x < -80 || x > W + 80 || y < -80 || y > H + 80) continue;
+      const s = it.sc * ps * (0.55 + 0.45 * e);
+      const shimmer = 1 - 0.14 * fa * (0.5 + 0.5 * Math.sin(tt * it.f4 + it.ph));
+      ctx.globalAlpha = Math.min(1, p * 2.4) * it.a * shimmer;
+      const sp = getSprite(it.idx, it.bucket);
+      const q = s / 1.25, c = Math.cos(rot) * q, sn = Math.sin(rot) * q;
+      ctx.setTransform(c, sn, -sn, c, x * dpr, y * dpr);
+      ctx.drawImage(sp, -sp.width / 2, -sp.height / 2);
+    }
+
+    // ----- text overlays -----
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.textAlign = "center"; ctx.textBaseline = "middle";
+
+    // intro (about 3 seconds)
+    if (el < 3.4) {
+      const a = sm(el / 0.6) * (1 - sm((el - 2.7) / 0.6));
+      if (a > 0) {
+        ctx.globalAlpha = a; ctx.fillStyle = "#ffdcd4";
+        ctx.shadowColor = "rgba(255,80,60,0.7)"; ctx.shadowBlur = 18;
+        ctx.font = "italic " + introSize + "px " + SERIF;
+        const lh = introSize * 1.4;
+        introLines.forEach((l, i) => ctx.fillText(l, W / 2, H / 2 + (i - (introLines.length - 1) / 2) * lh));
+        ctx.shadowBlur = 0; ctx.shadowColor = "transparent";
+      }
+    }
+
+    // message in the middle of the heart (black)
+    const ca = sm((t - (tComplete - 3)) / 3);
+    if (ca > 0) {
+      ctx.globalAlpha = ca;
+      ctx.save();
+      ctx.translate(W / 2, ecy); ctx.scale(1, eb / ea);
+      const gr = ctx.createRadialGradient(0, 0, 0, 0, 0, ea * 1.25);
+      gr.addColorStop(0, "rgba(255,98,68,0.97)");
+      gr.addColorStop(0.55, "rgba(238,52,38,0.9)");
+      gr.addColorStop(1, "rgba(200,20,25,0)");
+      ctx.fillStyle = gr; ctx.beginPath(); ctx.arc(0, 0, ea * 1.25, 0, Math.PI * 2); ctx.fill();
+      ctx.restore();
+      ctx.fillStyle = "#000";
+      const l1 = "to the love of my life,";
+      let s1 = ea * 0.2;
+      ctx.font = "italic " + s1 + "px " + SERIF;
+      s1 *= Math.min(1, (ea * 1.4) / ctx.measureText(l1).width);
+      const s2 = s1 * 2.2;
+      ctx.font = "italic " + s1 + "px " + SERIF;
+      ctx.fillText(l1, W / 2, ecy - s2 * 0.45);
+      ctx.font = "italic bold " + s2 + "px " + SERIF;
+      ctx.fillText("bunny", W / 2, ecy + s1 * 0.75);
+    }
+
+    // closing message under the heart
+    const ka = sm((t - (tComplete + 0.5)) / 2.5);
+    if (ka > 0) {
+      ctx.globalAlpha = ka * 0.95; ctx.fillStyle = "#f4cfc8";
+      ctx.font = "italic " + capSize + "px " + SERIF;
+      const lh = capSize * 1.55;
+      const top = heartBottom + Math.max(8, (H - heartBottom - capLines.length * lh) / 2) + lh / 2;
+      capLines.forEach((l, i) => ctx.fillText(l, W / 2, top + i * lh));
+    }
+    ctx.globalAlpha = 1;
+    requestAnimationFrame(frame);
+  }
+
+  let rz;
+  window.addEventListener("resize", () => { clearTimeout(rz); rz = setTimeout(build, 150); });
+  window.addEventListener("pointerdown", () => { t0 = performance.now(); }); // tap to replay
+  build();
+  requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>
